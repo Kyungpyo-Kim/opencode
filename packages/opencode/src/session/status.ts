@@ -6,9 +6,20 @@ import { Effect, Layer, Context, Schema } from "effect"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 
+export const RetryEntry = Schema.Struct({
+  attempt: NonNegativeInt,
+  message: Schema.String,
+  at: NonNegativeInt,
+  next: NonNegativeInt,
+})
+export type RetryEntry = Schema.Schema.Type<typeof RetryEntry>
+
+const RetryHistory = Schema.Array(RetryEntry)
+
 export const Info = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("idle"),
+    retryHistory: Schema.optional(RetryHistory),
   }),
   Schema.Struct({
     type: Schema.Literal("retry"),
@@ -25,9 +36,11 @@ export const Info = Schema.Union([
       }),
     ),
     next: NonNegativeInt,
+    retryHistory: RetryHistory,
   }),
   Schema.Struct({
     type: Schema.Literal("busy"),
+    retryHistory: Schema.optional(RetryHistory),
   }),
 ]).annotate({ identifier: "SessionStatus" })
 export type Info = Schema.Schema.Type<typeof Info>
@@ -80,8 +93,10 @@ export const layer = Layer.effect(
       yield* events.publish(Event.Status, { sessionID, status })
       if (status.type === "idle") {
         yield* events.publish(Event.Idle, { sessionID })
-        data.delete(sessionID)
-        return
+        if (!status.retryHistory?.length) {
+          data.delete(sessionID)
+          return
+        }
       }
       data.set(sessionID, status)
     })

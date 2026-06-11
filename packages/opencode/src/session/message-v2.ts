@@ -684,6 +684,17 @@ export function fromError(
         },
         { cause: e },
       ).toObject()
+    case e instanceof Error && e.message.toLowerCase().includes("timed out"):
+      return new APIError(
+        {
+          message: e.message,
+          isRetryable: true,
+          metadata: {
+            code: "OperationTimedOut",
+          },
+        },
+        { cause: e },
+      ).toObject()
     case APICallError.isInstance(e):
       const parsed = ProviderError.parseAPICallError({
         providerID: ctx.providerID,

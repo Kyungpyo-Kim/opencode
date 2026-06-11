@@ -696,9 +696,17 @@ export type QuestionTool = {
 
 export type QuestionAnswer = Array<string>
 
+export type RetryEntry = {
+  attempt: number
+  message: string
+  at: number
+  next: number
+}
+
 export type SessionStatus =
   | {
       type: "idle"
+      retryHistory?: Array<RetryEntry>
     }
   | {
       type: "retry"
@@ -713,9 +721,11 @@ export type SessionStatus =
         link?: string
       }
       next: number
+      retryHistory: Array<RetryEntry>
     }
   | {
       type: "busy"
+      retryHistory?: Array<RetryEntry>
     }
 
 export type GlobalEvent = {

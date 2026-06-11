@@ -450,18 +450,28 @@ export type EventPermissionReplied = {
   }
 }
 
+export type RetryEntry = {
+  attempt: number
+  message: string
+  at: number
+  next: number
+}
+
 export type SessionStatus =
   | {
       type: "idle"
+      retryHistory?: Array<RetryEntry>
     }
   | {
       type: "retry"
       attempt: number
       message: string
       next: number
+      retryHistory: Array<RetryEntry>
     }
   | {
       type: "busy"
+      retryHistory?: Array<RetryEntry>
     }
 
 export type EventSessionStatus = {

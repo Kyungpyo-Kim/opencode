@@ -79,6 +79,14 @@ function retry(sessionID: string, attempt: number, message: string) {
         attempt,
         message,
         next: 1,
+        retryHistory: [
+          {
+            attempt,
+            message,
+            at: 1,
+            next: 1,
+          },
+        ],
       },
     },
   } satisfies SdkEvent

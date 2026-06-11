@@ -90,6 +90,53 @@ function RawMessage(props: {
 const emptyMessages: Message[] = []
 const emptyUserMessages: UserMessage[] = []
 
+function RetryHistorySection(props: {
+  history: { attempt: number; message: string; at: number; next: number }[]
+  active: boolean
+  time: (value: number | undefined) => string
+}) {
+  return (
+    <div class="flex flex-col gap-2">
+      <div class="text-12-regular text-text-weak">Retry History</div>
+      <Accordion multiple defaultValue={props.active ? ["retry-history"] : []}>
+        <Accordion.Item value="retry-history">
+          <StickyAccordionHeader>
+            <Accordion.Trigger>
+              <div class="flex items-center justify-between gap-2 w-full">
+                <div class="min-w-0 truncate text-text-strong">
+                  {props.history.length} {props.history.length === 1 ? "retry" : "retries"}
+                </div>
+                <div class="flex items-center gap-3">
+                  <Show when={props.active}>
+                    <div class="shrink-0 text-11-medium text-text-warning">active</div>
+                  </Show>
+                  <Icon name="chevron-grabber-vertical" size="small" class="shrink-0 text-text-weak" />
+                </div>
+              </div>
+            </Accordion.Trigger>
+          </StickyAccordionHeader>
+          <Accordion.Content class="bg-background-base">
+            <div class="p-3 flex flex-col gap-2">
+              <For each={[...props.history].reverse()}>
+                {(entry) => (
+                  <div class="border border-border-base rounded-md bg-surface-base px-3 py-2 flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="text-12-medium text-text-strong">Attempt {entry.attempt}</div>
+                      <div class="text-11-regular text-text-weak">{props.time(entry.at)}</div>
+                    </div>
+                    <div class="text-12-regular text-text-base break-words">{entry.message}</div>
+                    <div class="text-11-regular text-text-weak">Next retry: {props.time(entry.next)}</div>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Accordion.Content>
+        </Accordion.Item>
+      </Accordion>
+    </div>
+  )
+}
+
 export function SessionContextTab() {
   const sync = useSync()
   const language = useLanguage()
@@ -123,6 +170,17 @@ export function SessionContextTab() {
     emptyUserMessages,
     { equals: same },
   )
+
+  const sessionStatus = createMemo(() => {
+    const id = params.id
+    if (!id) return { type: "idle" as const }
+    return sync.data.session_status[id] ?? { type: "idle" as const }
+  })
+
+  const retryHistory = createMemo(() => {
+    const status = sessionStatus()
+    return "retryHistory" in status ? (status.retryHistory ?? []) : []
+  })
 
   const usd = createMemo(
     () =>
@@ -323,6 +381,14 @@ export function SessionContextTab() {
               </div>
             </div>
           )}
+        </Show>
+
+        <Show when={retryHistory().length > 0}>
+          <RetryHistorySection
+            history={retryHistory()}
+            active={sessionStatus().type === "retry"}
+            time={formatter().time}
+          />
         </Show>
 
         <div class="flex flex-col gap-2">

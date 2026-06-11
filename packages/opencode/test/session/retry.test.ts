@@ -101,6 +101,14 @@ describe("session.retry.delay", () => {
               attempt: info.attempt,
               message: info.message,
               next: info.next,
+              retryHistory: [
+                {
+                  attempt: info.attempt,
+                  message: info.message,
+                  at: info.next,
+                  next: info.next,
+                },
+              ],
             }),
         }),
       )

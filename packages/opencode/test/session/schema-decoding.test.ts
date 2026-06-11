@@ -243,6 +243,14 @@ describe("SessionStatus.Info", () => {
         link: "https://opencode.ai/go",
       },
       next: 500,
+      retryHistory: [
+        {
+          attempt: 1,
+          message: "transient",
+          at: 100,
+          next: 500,
+        },
+      ],
     }
     expect(decode(input)).toEqual(input)
   })

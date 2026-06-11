@@ -135,6 +135,8 @@ export const layer = Layer.effect(
           aborted,
         })
 
+      const retryHistory = (statusInfo: SessionStatus.Info | undefined) => statusInfo?.retryHistory ?? []
+
       const settleToolCall = Effect.fn("SessionProcessor.settleToolCall")(function* (toolCallID: string) {
         const done = ctx.toolcalls[toolCallID]?.done
         delete ctx.toolcalls[toolCallID]
@@ -928,7 +930,8 @@ export const layer = Layer.effect(
             ctx.assistantMessage.error = error
             ctx.assistantMessage.finish = "error"
             yield* events.publish(Session.Event.Error, { sessionID: ctx.sessionID, error })
-            yield* status.set(ctx.sessionID, { type: "idle" })
+            const currentStatus = yield* status.get(ctx.sessionID)
+            yield* status.set(ctx.sessionID, { type: "idle", retryHistory: retryHistory(currentStatus) })
             return
           }
           ctx.needsCompaction = true
@@ -954,7 +957,8 @@ export const layer = Layer.effect(
           sessionID: ctx.assistantMessage.sessionID,
           error: ctx.assistantMessage.error,
         })
-        yield* status.set(ctx.sessionID, { type: "idle" })
+        const currentStatus = yield* status.get(ctx.sessionID)
+        yield* status.set(ctx.sessionID, { type: "idle", retryHistory: retryHistory(currentStatus) })
       })
 
       const process = Effect.fn("SessionProcessor.process")(function* (streamInput: LLM.StreamInput) {
@@ -970,7 +974,7 @@ export const layer = Layer.effect(
             ctx.currentText = undefined
             ctx.currentTextID = undefined
             ctx.reasoningMap = {}
-            yield* status.set(ctx.sessionID, { type: "busy" })
+            yield* status.set(ctx.sessionID, { type: "busy", retryHistory: [] })
             const stream = llm.stream(streamInput)
 
             yield* stream.pipe(
@@ -1011,12 +1015,22 @@ export const layer = Layer.effect(
                   return flushV2Fragments().pipe(
                     Effect.andThen(event),
                     Effect.andThen(
-                      status.set(ctx.sessionID, {
-                        type: "retry",
-                        attempt: info.attempt,
-                        message: info.message,
-                        action: info.action,
-                        next: info.next,
+                      Effect.gen(function* () {
+                        const currentStatus = yield* status.get(ctx.sessionID)
+                        const entry = {
+                          attempt: info.attempt,
+                          message: info.message,
+                          at: Date.now(),
+                          next: info.next,
+                        }
+                        yield* status.set(ctx.sessionID, {
+                          type: "retry",
+                          attempt: info.attempt,
+                          message: info.message,
+                          action: info.action,
+                          next: info.next,
+                          retryHistory: [...retryHistory(currentStatus), entry].slice(-10),
+                        })
                       }),
                     ),
                   )
