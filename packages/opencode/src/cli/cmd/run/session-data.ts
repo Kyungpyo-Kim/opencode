@@ -190,6 +190,26 @@ function msgErr(id: string): string {
   return `msg:${id}:error`
 }
 
+function retryMsg(attempt: number): string {
+  return `retry:${attempt}`
+}
+
+function formatRetryDelay(next: number): string | undefined {
+  const delay = Math.max(0, next - Date.now())
+  if (!Number.isFinite(delay) || delay <= 0) {
+    return undefined
+  }
+
+  const seconds = Math.ceil(delay / 1000)
+  return seconds === 1 ? "1s" : `${seconds}s`
+}
+
+function formatRetryStatus(input: { attempt: number; message: string; next: number }) {
+  const delay = formatRetryDelay(input.next)
+  const prefix = `retry ${input.attempt}`
+  return delay ? `${prefix} in ${delay} · ${input.message}` : `${prefix} · ${input.message}`
+}
+
 function patch(patch?: FooterPatch, view?: FooterView): FooterOutput | undefined {
   if (!patch && !view) {
     return undefined
@@ -819,6 +839,31 @@ export function reduceSessionData(input: SessionDataInput): SessionDataOutput {
 
     data.ids.add(partID)
     commits.push(doneShell(event.properties.callID, command, event.properties.output))
+    return out(data, commits)
+  }
+
+  if (event.type === "session.status") {
+    if (event.properties.sessionID !== input.sessionID) {
+      return out(data, commits)
+    }
+
+    const status = event.properties.status
+    if (status.type === "retry") {
+      const key = retryMsg(status.attempt)
+      if (!data.ids.has(key)) {
+        data.ids.add(key)
+        commits.push({
+          kind: "error",
+          text: formatRetryStatus(status),
+          phase: "start",
+          source: "system",
+          messageID: key,
+        })
+      }
+
+      return out(data, commits, patch({ status: formatRetryStatus(status) }))
+    }
+
     return out(data, commits)
   }
 

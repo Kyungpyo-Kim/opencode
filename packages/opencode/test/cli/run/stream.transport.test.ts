@@ -1560,6 +1560,52 @@ describe("run stream transport", () => {
     }
   })
 
+  test("surfaces main-session retry events in direct-mode transcript and footer", async () => {
+    const stream = eventFeed()
+    const ui = footer()
+    const transport = await createSessionTransport({
+      sdk: sdk({
+        stream: stream.stream,
+        status: () => ok({}),
+      }),
+      sessionID: "session-1",
+      thinking: true,
+      limits: () => ({}),
+      footer: ui.api,
+    })
+
+    const turn = transport.runPromptTurn({
+      agent: undefined,
+      prompt: { text: "hello", parts: [] },
+      model: undefined,
+      variant: undefined,
+      files: [],
+      includeFiles: true,
+    })
+
+    await Promise.resolve()
+    stream.push(retry("session-1", 2, "provider overloaded"))
+    stream.push(idle())
+
+    await turn
+
+    expect(ui.commits).toContainEqual(
+      expect.objectContaining({
+        kind: "error",
+        source: "system",
+        messageID: "retry:2",
+      }),
+    )
+    expect(ui.events).toContainEqual(
+      expect.objectContaining({
+        type: "stream.patch",
+        patch: expect.objectContaining({
+          status: expect.stringContaining("retry 2"),
+        }),
+      }),
+    )
+  })
+
   test("replays child events buffered during bootstrap once the tab is known", async () => {
     const global = globalFeed()
     const ui = footer()
